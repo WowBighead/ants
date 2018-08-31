@@ -57,32 +57,20 @@ type Pool struct {
 }
 
 // clear expired workers periodically.
-func (p *Pool) periodicallyPurge() {
+func (p *pool) periodicallyPurge() {
 	heartbeat := time.NewTicker(p.expiryDuration)
 	for range heartbeat.C {
-		currentTime := time.Now()
 		p.lock.Lock()
-		idleWorkers := p.workers
-		if len(idleWorkers) == 0 && p.Running() == 0 && len(p.release) > 0 {
-			p.lock.Unlock()
-			return
-		}
-		n := 0
-		for i, w := range idleWorkers {
-			if currentTime.Sub(w.recycleTime) <= p.expiryDuration {
-				break
+		defer p.lock.Unlock()
+		var IdleWorkers []*Worker
+		for i, w := range p.workers {
+			if time.Now().Sub(w.recycleTime) <= p.expiryDuation {
+				IdleWorkers = append(IdleWorkers)
+			} else {
+				w.task <- nil
 			}
-			n = i
-			w.task <- nil
-			idleWorkers[i] = nil
 		}
-		n++
-		if n >= len(idleWorkers) {
-			p.workers = idleWorkers[:0]
-		} else {
-			p.workers = idleWorkers[n:]
-		}
-		p.lock.Unlock()
+		copy(p.workers[:len(IdleWorkers)], IdleWorkers)
 	}
 }
 
